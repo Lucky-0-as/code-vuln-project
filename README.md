@@ -1,8 +1,8 @@
 # Hierarchical Graph-Biased Siamese Multi-Task Vulnerability Detection for C/C++
 
-A fully reproducible deep learning and program-analysis pipeline for **function-level and line-level C/C++ vulnerability detection** on the **PrimeVul** benchmark (`DLVulDet/PrimeVul`, arXiv:2403.18624).
+A program-analysis pipeline for **function-level and line-level C/C++ vulnerability detection** on the **PrimeVul** benchmark (`DLVulDet/PrimeVul`, arXiv:2403.18624).
 
-This repository extends pretrained code encoders (`UniXcoder` / `CodeBERT`) with **five architectural and training upgrades** designed to overcome context-window truncation, variable-name shortcut reliance, and coarse function-only supervision:
+This repository extends pretrained code encoders (`UniXcoder` / `CodeBERT`) designed to overcome context-window truncation, variable-name shortcut reliance, and coarse function-only supervision:
 
 1. **Hierarchical Chunk-Attention Encoder (`src/model.py`, `src/dataset.py`):** Splits long C/C++ functions into up to $K=4$ overlapping 512-token windows (`stride = 256`, covering **1,280+ tokens** plus function epilogue preservation) and aggregates chunk embeddings using a **2-layer Transformer Encoder + Gated Attention Pooling**.
 2. **Siamese Counterfactual Invariance Head (`src/model.py`, `src/ast_graph.py`):** Uses `tree-sitter-cpp` to rewrite user-defined variables and functions into canonical placeholders (`var_1`, `func_1`) while preserving C/C++ keywords and security APIs (`memcpy`, `malloc`, `free`). Trains a dual-branch shared encoder with symmetric **Jensen-Shannon Divergence (JSD) + Cosine Alignment** to eliminate lexical shortcut reliance.
@@ -47,21 +47,10 @@ conda activate vuln-detect
 pip install -r requirements.txt
 ```
 
-### Kaggle GPU Notebook (Recommended for Full PrimeVul Training)
-1. Enable **GPU T4 x2** (or **P100**) and **Internet** in your Kaggle Notebook settings.
-2. Upload this repository (or clone from GitHub) into `/kaggle/working/primevul-vuln-transformers`.
-3. Install `tree-sitter` language bindings:
-   ```bash
-   pip install -q tree-sitter==0.21.3 tree-sitter-cpp tree-sitter-c
-   ```
-4. `src/config.py` automatically detects `/kaggle/working`, enables `nn.DataParallel` across dual T4 GPUs, and stores outputs cleanly in `/kaggle/working/vuln-detect/outputs/`.
-
----
-
 ## Dataset Access & Reproducibility Notes
 
-### Option A: Immediate Zero-Download Verification (For Instructors & Graders)
-To allow immediate verification without downloading multi-gigabyte archives, this repository includes a permitted, self-contained sample dataset at `data/sample/primevul_sample.jsonl` containing **12 real-world-style C/C++ functions** (6 vulnerable functions paired with 6 post-patch security fixes across buffer overflows, use-after-free, integer overflow, out-of-bounds read, and null pointer dereference).
+### Option A: Immediate Zero-Download Verification
+To allow immediate verification without downloading much data, this repository includes a permitted, self-contained sample dataset at `data/sample/primevul_sample.jsonl` containing **12 real-world-style C/C++ functions** (6 vulnerable functions paired with 6 post-patch security fixes across buffer overflows, use-after-free, integer overflow, out-of-bounds read, and null pointer dereference).
 
 Run the complete end-to-end smoke test (preprocessing $\rightarrow$ classical baselines $\rightarrow$ single-window baseline $\rightarrow$ 5-upgrade model $\rightarrow$ paired & shortcut audits $\rightarrow$ live demo) in ~60 seconds:
 ```bash
@@ -73,7 +62,7 @@ python main.py --stage smoke_test
    - Unpaired splits: `primevul_train.jsonl`, `primevul_valid.jsonl`, `primevul_test.jsonl`
    - Paired commit splits: `primevul_train_paired.jsonl`, `primevul_valid_paired.jsonl`, `primevul_test_paired.jsonl`
 2. Place the `.jsonl` files inside `data/raw/` (or attach them as a Kaggle Dataset at `/kaggle/input/primevul`, or set `export PRIMEVUL_RAW_DIR=/path/to/primevul`).
-3. All random seeds (`SEED = 26210029`), splits, validation thresholds, and `tree-sitter` traversal orders are locked deterministically in `src/config.py`.
+3. All random seeds, splits, validation thresholds, and `tree-sitter` traversal orders are locked deterministically in `src/config.py`.
 
 ---
 
@@ -113,7 +102,7 @@ Evaluates all trained models on:
 ```bash
 python main.py --stage audit
 ```
-Generated CSV tables are saved to `outputs/tables/` and publication-ready PDF/PNG plots are saved to `outputs/figures/`.
+Generated CSV tables are saved to `outputs/tables/` and plots are saved to `outputs/figures/`.
 
 ### 6. Live Interactive Inference & Line Localization Demo
 Run vulnerability prediction, variable-renaming flip testing, and top-line bug localization on any C/C++ snippet:
