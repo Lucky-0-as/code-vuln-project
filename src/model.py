@@ -1,4 +1,3 @@
-%%writefile /kaggle/working/primevul-vuln-transformers/src/model.py
 """
 Unified 5-Upgrade Neural Architecture for C/C++ Vulnerability Detection:
   Upgrade #1: Hierarchical Chunk-Attention Aggregator (handles 1,280+ tokens)
@@ -107,7 +106,9 @@ class GatedChunkAggregator(nn.Module):
             batch_first=True,
             norm_first=True,
         )
-        self.chunk_transformer = nn.TransformerEncoder(encoder_layer, num_layers=2)
+        self.chunk_transformer = nn.TransformerEncoder(
+            encoder_layer, num_layers=2, enable_nested_tensor=False
+        )
 
         self.gate_v = nn.Linear(hidden_size, hidden_size // 2)
         self.gate_u = nn.Linear(hidden_size, hidden_size // 2)
@@ -152,13 +153,12 @@ class HierarchicalGraphSiameseVulnDetector(nn.Module):
         self.use_line_head = use_line_head
 
         hf_cfg = AutoConfig.from_pretrained(backbone_name)
-        hf_cfg.output_hidden_states = True
         self.encoder = AutoModel.from_pretrained(
             backbone_name, config=hf_cfg, attn_implementation="eager"
         )
 
         hidden_size = hf_cfg.hidden_size
-        num_layers = hf_cfg.num_hidden_layers
+        self.num_layers = hf_cfg.num_hidden_layers
         num_heads = hf_cfg.num_attention_heads
 
         # Upgrade #3: Learned per-head relational bias embedding for AST / Def-Use / Control-Flow edges
@@ -171,7 +171,7 @@ class HierarchicalGraphSiameseVulnDetector(nn.Module):
 
         # Upgrade #4: Learnable softmax layer-weighting + Multi-Head Token Attention Pooling
         if self.use_layer_pooling:
-            self.layer_weights = nn.Parameter(torch.zeros(num_layers))
+            self.layer_weights = nn.Parameter(torch.zeros(self.num_layers))
             self.token_pooler = MultiHeadAttentionPooling(
                 hidden_size=hidden_size, num_heads=config.POOLING_NUM_HEADS, dropout=dropout
             )
@@ -229,7 +229,9 @@ class HierarchicalGraphSiameseVulnDetector(nn.Module):
             _ACTIVE_EDGE_BIAS.reset(token_ctx)
 
         if self.use_layer_pooling:
-            stacked_layers = torch.stack(outputs.hidden_states[1:], dim=0)
+            # Slice last `self.num_layers` states to guard against duplicate layer captures
+            layer_states = outputs.hidden_states[-self.num_layers :]
+            stacked_layers = torch.stack(layer_states, dim=0)
             norm_weights = torch.softmax(self.layer_weights, dim=0).view(-1, 1, 1, 1)
             token_repr = torch.sum(stacked_layers * norm_weights, dim=0)
             chunk_repr = self.token_pooler(token_repr, flat_mask)
